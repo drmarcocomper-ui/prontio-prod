@@ -24,6 +24,15 @@
     });
   }
 
+  // evita recarregar o mesmo script
+  PRONTIO._loadedScripts = PRONTIO._loadedScripts || {};
+  async function loadOnce_(src) {
+    if (PRONTIO._loadedScripts[src]) return true;
+    const ok = await loadScript_(src);
+    if (ok) PRONTIO._loadedScripts[src] = true;
+    return ok;
+  }
+
   /**
    * GARANTIA DO PADRÃO PRONTIO DE API
    * - Usa assets/js/core/config.js + assets/js/core/api.js
@@ -36,8 +45,8 @@
 
     if (hasApi) return true;
 
-    await loadScript_("assets/js/core/config.js");
-    const ok = await loadScript_("assets/js/core/api.js");
+    await loadOnce_("assets/js/core/config.js");
+    const ok = await loadOnce_("assets/js/core/api.js");
 
     const hasApiAfter =
       ok &&
@@ -248,17 +257,15 @@
     const pageId = getPageId_();
     if (!pageId) return;
 
-    // ✅ Carrega o JS da página atual (se ainda não registrado)
+    // Carrega o JS da página atual se ainda não registrado
     if (!PRONTIO.pages[pageId]) {
-      let ok = await loadScript_("assets/js/pages/page-" + pageId + ".js");
-      if (!ok) ok = await loadScript_("assets/js/page-" + pageId + ".js");
+      let ok = await loadOnce_("assets/js/pages/page-" + pageId + ".js");
+      if (!ok) ok = await loadOnce_("assets/js/page-" + pageId + ".js");
     }
 
-    // ✅ MÓDULOS EXTRAS POR PÁGINA
-    // Prontuário precisa do controlador do painel de Receita.
+    // ✅ MÓDULOS EXTRAS: prontuário precisa do controlador do painel de Receita
     if (pageId === "prontuario") {
-      // carrega depois da API e antes do init (para hooks existirem)
-      await loadScript_("assets/js/pages/page-receita.js");
+      await loadOnce_("assets/js/pages/page-receita.js");
     }
 
     const page = PRONTIO.pages[pageId];
