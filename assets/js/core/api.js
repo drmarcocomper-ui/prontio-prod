@@ -64,7 +64,6 @@
     if (envelope && envelope.success) return;
 
     const errs = (envelope && envelope.errors) || [];
-    // errors pode ser string[] ou [{message,...}]
     const msg = errs.length
       ? errs.map((e) => (e && e.message) ? e.message : String(e)).join("\n")
       : "Falha na operação (success=false).";
@@ -83,17 +82,12 @@
   /**
    * ✅ PADRONIZAÇÃO / COMPATIBILIDADE DE ACTIONS
    *
-   * Objetivo:
-   * - Front usa Remedios.* (canônico)
-   * - Backend legado pode ter apenas Medicamentos.* no Api.gs
+   * REGRA ATUAL (para destravar DEV agora):
+   * - Se o front chamar Remedios.*, converte para Medicamentos.* (backend já suporta)
+   * - NÃO converter Medicamentos.* -> Remedios.* enquanto o backend não reconhecer Remedios.*
    *
-   * Então:
-   * - Se vier Remedios.* e o backend não tiver alias, convertemos para Medicamentos.*
-   * - Se vier Medicamentos.* (legado no front), também convertemos para Remedios.* (se você quiser padronizar logs)
-   *
-   * Observação:
-   * - Como seu erro atual é "Remedios.Listar desconhecido",
-   *   o mapeamento Remedios -> Medicamentos é o que destrava agora.
+   * Isso evita exatamente o bug que você viu:
+   * Medicamentos.ListarAtivos virando Remedios.ListarAtivos e quebrando no Api.gs.
    */
   function normalizeAction_(action) {
     const a = String(action || "").trim();
@@ -107,17 +101,7 @@
       return "Medicamentos_" + a.substring("Remedios_".length);
     }
 
-    // (opcional) legado (front) -> canônico
-    // Mantive para padronizar o projeto e permitir você limpar chamadas antigas.
-    if (a.indexOf("Medicamentos.") === 0) {
-      // Se você preferir não converter nesse sentido, pode comentar estas 2 linhas.
-      // Aqui convertemos para Remedios.* apenas para padronização do front.
-      return "Remedios." + a.substring("Medicamentos.".length);
-    }
-    if (a.indexOf("Medicamentos_") === 0) {
-      return "Remedios_" + a.substring("Medicamentos_".length);
-    }
-
+    // ✅ Mantém Medicamentos.* como está (backend reconhece)
     return a;
   }
 
@@ -179,6 +163,6 @@
   PRONTIO.api.callApiData = callApiData;
   PRONTIO.api.assertSuccess = assertSuccess_;
 
-  global.callApi = callApiEnvelope; // envelope
-  global.callApiData = callApiData; // data
+  global.callApi = callApiEnvelope;   // envelope
+  global.callApiData = callApiData;   // data
 })(window);
