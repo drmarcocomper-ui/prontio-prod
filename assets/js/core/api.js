@@ -1,24 +1,18 @@
 /**
  * PRONTIO - Camada oficial de API (Front-end)
  *
- * Contrato obrigatório esperado do backend (Apps Script):
+ * Contrato esperado do backend (Apps Script):
  *   { success: boolean, data: any, errors: any[] }
  *
  * Exporta:
- * - PRONTIO.api.callApiEnvelope({ action, payload }) -> retorna o envelope completo
- * - PRONTIO.api.callApiData({ action, payload })     -> retorna SOMENTE data e lança erro se success=false
- *
- * Observação:
- * - Este arquivo deve ser carregado ANTES dos scripts de páginas.
+ * - PRONTIO.api.callApiEnvelope({ action, payload }) -> envelope completo
+ * - PRONTIO.api.callApiData({ action, payload })     -> somente data (throw se success=false)
  */
 
 (function (global) {
   const PRONTIO = (global.PRONTIO = global.PRONTIO || {});
   PRONTIO.api = PRONTIO.api || {};
 
-  // -----------------------------
-  // Descoberta da URL da API
-  // -----------------------------
   function getApiUrl_() {
     if (PRONTIO.config && PRONTIO.config.apiUrl) return PRONTIO.config.apiUrl;
     if (global.PRONTIO_API_URL) return global.PRONTIO_API_URL;
@@ -35,24 +29,15 @@
     return "";
   }
 
-  // -----------------------------
-  // Helpers
-  // -----------------------------
   function normalizeError_(err) {
     if (!err) return "Erro desconhecido";
     if (typeof err === "string") return err;
     if (err.message) return err.message;
-    try {
-      return JSON.stringify(err);
-    } catch {
-      return String(err);
-    }
+    try { return JSON.stringify(err); } catch { return String(err); }
   }
 
   function ensureEnvelope_(json) {
-    if (!json || typeof json !== "object") {
-      throw new Error("Resposta inválida da API (não é JSON objeto).");
-    }
+    if (!json || typeof json !== "object") throw new Error("Resposta inválida da API (não é JSON objeto).");
     if (!("success" in json) || !("data" in json) || !("errors" in json)) {
       throw new Error("Resposta inválida da API (envelope fora do padrão PRONTIO).");
     }
@@ -72,42 +57,26 @@
   }
 
   async function safeReadText_(resp) {
-    try {
-      return await resp.text();
-    } catch {
-      return "";
-    }
+    try { return await resp.text(); } catch { return ""; }
   }
 
   /**
-   * ✅ PADRONIZAÇÃO / COMPATIBILIDADE DE ACTIONS
-   *
-   * REGRA ATUAL (para destravar DEV agora):
-   * - Se o front chamar Remedios.*, converte para Medicamentos.* (backend já suporta)
-   * - NÃO converter Medicamentos.* -> Remedios.* enquanto o backend não reconhecer Remedios.*
-   *
-   * Isso evita exatamente o bug que você viu:
-   * Medicamentos.ListarAtivos virando Remedios.ListarAtivos e quebrando no Api.gs.
+   * ✅ NORMALIZAÇÃO DEFINITIVA (sem quebrar backend atual):
+   * - Remedios.*  -> Medicamentos.*  (backend aceita)
+   * - Medicamentos.* fica como está  (NÃO converter para Remedios.*)
    */
   function normalizeAction_(action) {
     const a = String(action || "").trim();
     if (!a) return "";
 
-    // ✅ CANÔNICO (front) -> LEGADO (backend)
-    if (a.indexOf("Remedios.") === 0) {
-      return "Medicamentos." + a.substring("Remedios.".length);
-    }
-    if (a.indexOf("Remedios_") === 0) {
-      return "Medicamentos_" + a.substring("Remedios_".length);
-    }
+    // canônico -> legado
+    if (a.indexOf("Remedios.") === 0) return "Medicamentos." + a.substring("Remedios.".length);
+    if (a.indexOf("Remedios_") === 0) return "Medicamentos_" + a.substring("Remedios_".length);
 
-    // ✅ Mantém Medicamentos.* como está (backend reconhece)
+    // legado fica como está
     return a;
   }
 
-  // -----------------------------
-  // Implementação de chamada (fetch)
-  // -----------------------------
   async function callApiEnvelope(args) {
     const apiUrl = getApiUrl_();
     if (!apiUrl) throw new Error("URL da API não configurada (apiUrl).");
@@ -122,10 +91,7 @@
     try {
       resp = await fetch(apiUrl, {
         method: "POST",
-
-        // ✅ Apps Script: evita preflight CORS
         headers: { "Content-Type": "text/plain; charset=utf-8" },
-
         body: JSON.stringify({ action, payload }),
       });
     } catch (e) {
@@ -156,13 +122,10 @@
     return envelope.data;
   }
 
-  // -----------------------------
-  // Exposição padrão PRONTIO
-  // -----------------------------
   PRONTIO.api.callApiEnvelope = callApiEnvelope;
   PRONTIO.api.callApiData = callApiData;
   PRONTIO.api.assertSuccess = assertSuccess_;
 
-  global.callApi = callApiEnvelope;   // envelope
-  global.callApiData = callApiData;   // data
+  global.callApi = callApiEnvelope;
+  global.callApiData = callApiData;
 })(window);
