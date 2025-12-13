@@ -63,7 +63,9 @@
   function assertSuccess_(envelope) {
     if (envelope && envelope.success) return;
     const errs = (envelope && envelope.errors) || [];
-    const msg = errs.length ? errs.map(e => (e && e.message) ? e.message : String(e)).join("\n") : "Falha na operação (success=false).";
+    const msg = errs.length
+      ? errs.map(e => (e && e.message) ? e.message : String(e)).join("\n")
+      : "Falha na operação (success=false).";
     throw new Error(msg);
   }
 
@@ -78,13 +80,11 @@
   /**
    * ✅ PADRONIZAÇÃO GLOBAL DE ACTIONS NO FRONT
    * - Tudo que ainda chamar Medicamentos.* será convertido para Remedios.*
-   * - Isso ajuda a “limpar” o front sem caçar arquivos.
    */
   function normalizeAction_(action) {
     const a = String(action || "").trim();
     if (!a) return "";
 
-    // Canoniza o prefixo do módulo
     if (a.indexOf("Medicamentos.") === 0) {
       console.warn("[PRONTIO] Action legada detectada (Medicamentos.*). Convertendo para Remedios.*:", a);
       return "Remedios." + a.substring("Medicamentos.".length);
@@ -114,7 +114,12 @@
     try {
       resp = await fetch(apiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
+
+        // ✅ FIX CORS (Apps Script):
+        // "application/json" dispara preflight (OPTIONS) e o Apps Script não responde CORS.
+        // "text/plain" evita preflight e ainda permite JSON.parse(e.postData.contents) no backend.
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+
         body: JSON.stringify({ action, payload }),
         // credentials: "include",
       });
@@ -153,6 +158,6 @@
   PRONTIO.api.callApiData = callApiData;
   PRONTIO.api.assertSuccess = assertSuccess_;
 
-  global.callApi = callApiEnvelope; // envelope
-  global.callApiData = callApiData; // data
+  global.callApi = callApiEnvelope;   // envelope
+  global.callApiData = callApiData;   // data
 })(window);
