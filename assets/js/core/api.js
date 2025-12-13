@@ -2,7 +2,7 @@
  * PRONTIO - Camada oficial de API (Front-end)
  *
  * Contrato obrigatório esperado do backend (Apps Script):
- *   { success: boolean, data: any, errors: string[] }
+ *   { success: boolean, data: any, errors: any[] }
  *
  * Exporta:
  * - PRONTIO.api.callApiEnvelope({ action, payload }) -> retorna o envelope completo
@@ -62,10 +62,13 @@
 
   function assertSuccess_(envelope) {
     if (envelope && envelope.success) return;
+
     const errs = (envelope && envelope.errors) || [];
+    // errors pode ser string[] ou [{message,...}]
     const msg = errs.length
-      ? errs.map(e => (e && e.message) ? e.message : String(e)).join("\n")
+      ? errs.map((e) => (e && e.message) ? e.message : String(e)).join("\n")
       : "Falha na operação (success=false).";
+
     throw new Error(msg);
   }
 
@@ -78,19 +81,40 @@
   }
 
   /**
-   * ✅ PADRONIZAÇÃO GLOBAL DE ACTIONS NO FRONT
-   * - Tudo que ainda chamar Medicamentos.* será convertido para Remedios.*
+   * ✅ PADRONIZAÇÃO / COMPATIBILIDADE DE ACTIONS
+   *
+   * Objetivo:
+   * - Front usa Remedios.* (canônico)
+   * - Backend legado pode ter apenas Medicamentos.* no Api.gs
+   *
+   * Então:
+   * - Se vier Remedios.* e o backend não tiver alias, convertemos para Medicamentos.*
+   * - Se vier Medicamentos.* (legado no front), também convertemos para Remedios.* (se você quiser padronizar logs)
+   *
+   * Observação:
+   * - Como seu erro atual é "Remedios.Listar desconhecido",
+   *   o mapeamento Remedios -> Medicamentos é o que destrava agora.
    */
   function normalizeAction_(action) {
     const a = String(action || "").trim();
     if (!a) return "";
 
+    // ✅ CANÔNICO (front) -> LEGADO (backend)
+    if (a.indexOf("Remedios.") === 0) {
+      return "Medicamentos." + a.substring("Remedios.".length);
+    }
+    if (a.indexOf("Remedios_") === 0) {
+      return "Medicamentos_" + a.substring("Remedios_".length);
+    }
+
+    // (opcional) legado (front) -> canônico
+    // Mantive para padronizar o projeto e permitir você limpar chamadas antigas.
     if (a.indexOf("Medicamentos.") === 0) {
-      console.warn("[PRONTIO] Action legada detectada (Medicamentos.*). Convertendo para Remedios.*:", a);
+      // Se você preferir não converter nesse sentido, pode comentar estas 2 linhas.
+      // Aqui convertemos para Remedios.* apenas para padronização do front.
       return "Remedios." + a.substring("Medicamentos.".length);
     }
     if (a.indexOf("Medicamentos_") === 0) {
-      console.warn("[PRONTIO] Action legada detectada (Medicamentos_*). Convertendo para Remedios_*:", a);
       return "Remedios_" + a.substring("Medicamentos_".length);
     }
 
@@ -115,13 +139,10 @@
       resp = await fetch(apiUrl, {
         method: "POST",
 
-        // ✅ FIX CORS (Apps Script):
-        // "application/json" dispara preflight (OPTIONS) e o Apps Script não responde CORS.
-        // "text/plain" evita preflight e ainda permite JSON.parse(e.postData.contents) no backend.
+        // ✅ Apps Script: evita preflight CORS
         headers: { "Content-Type": "text/plain; charset=utf-8" },
 
         body: JSON.stringify({ action, payload }),
-        // credentials: "include",
       });
     } catch (e) {
       throw new Error("Falha de rede ao chamar API: " + normalizeError_(e));
@@ -158,6 +179,6 @@
   PRONTIO.api.callApiData = callApiData;
   PRONTIO.api.assertSuccess = assertSuccess_;
 
-  global.callApi = callApiEnvelope;   // envelope
-  global.callApiData = callApiData;   // data
+  global.callApi = callApiEnvelope; // envelope
+  global.callApiData = callApiData; // data
 })(window);
