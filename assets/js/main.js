@@ -26,12 +26,7 @@
 
   /**
    * GARANTIA DO PADRÃO PRONTIO DE API
-   *
-   * Regra (SEU PADRÃO):
-   * - NÃO criar assets/js/api.js
-   * - Usar assets/js/core/api.js como arquivo oficial
-   * - Garantir que ele define:
-   *    PRONTIO.api.callApiEnvelope, PRONTIO.api.callApiData
+   * - Usa assets/js/core/config.js + assets/js/core/api.js
    */
   async function ensureApiLoaded_() {
     const hasApi =
@@ -41,10 +36,7 @@
 
     if (hasApi) return true;
 
-    // opcional: config central
     await loadScript_("assets/js/core/config.js");
-
-    // ✅ caminho correto no seu projeto
     const ok = await loadScript_("assets/js/core/api.js");
 
     const hasApiAfter =
@@ -250,14 +242,23 @@
     initModals_();
     initThemeToggle_();
 
+    // ✅ API primeiro
     await ensureApiLoaded_();
 
     const pageId = getPageId_();
     if (!pageId) return;
 
+    // ✅ Carrega o JS da página atual (se ainda não registrado)
     if (!PRONTIO.pages[pageId]) {
       let ok = await loadScript_("assets/js/pages/page-" + pageId + ".js");
       if (!ok) ok = await loadScript_("assets/js/page-" + pageId + ".js");
+    }
+
+    // ✅ MÓDULOS EXTRAS POR PÁGINA
+    // Prontuário precisa do controlador do painel de Receita.
+    if (pageId === "prontuario") {
+      // carrega depois da API e antes do init (para hooks existirem)
+      await loadScript_("assets/js/pages/page-receita.js");
     }
 
     const page = PRONTIO.pages[pageId];
