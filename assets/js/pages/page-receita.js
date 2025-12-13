@@ -3,15 +3,11 @@
  *
  * Padrão PRONTIO:
  * - Usar callApiData() (retorna somente data e lança erro em success=false)
- * - Catálogo padronizado:
- *    Entidade: Remedios
- *    Action:   Remedios.Listar
- *    Retorno:  { remedios: [...] }
- *    Front:    variáveis "remedios"
  *
- * Importante:
- * - Este arquivo é o ÚNICO controlador do painel #receitaPanel.
- * - page-prontuario.js NÃO deve controlar render / catálogo / submit do painel.
+ * Observação importante:
+ * - Backend DEV ainda não reconhece "Remedios.*" no Api.gs (módulo desconhecido).
+ * - Portanto, aqui chamamos "Medicamentos.ListarAtivos" (que já funciona),
+ *   mas aceitamos retorno tanto em data.medicamentos (legado) quanto data.remedios (canônico).
  */
 
 (function (global, document) {
@@ -20,24 +16,17 @@
     (PRONTIO.api && PRONTIO.api.callApiData) ||
     global.callApiData ||
     function () {
-      return Promise.reject(new Error("callApiData não disponível (assets/js/api.js não foi carregado?)"));
+      return Promise.reject(new Error("callApiData não disponível (API não carregada)."));
     };
 
   function qs(sel) { return document.querySelector(sel); }
   function qsa(sel) { return Array.from(document.querySelectorAll(sel)); }
 
-  /* =========================================================
-   * ESTADO
-   * ========================================================= */
   let itens = [];
   let nextItemId = 1;
 
   let remedios = [];
   let remediosCarregados = false;
-
-  /* =========================================================
-   * CATÁLOGO DE REMÉDIOS (PADRÃO)
-   * ========================================================= */
 
   function getNomeRemedio_(r) {
     return String(
@@ -60,21 +49,21 @@
   async function carregarCatalogoRemedios() {
     if (remediosCarregados) return remedios;
 
+    // ✅ Usa módulo existente no Api.gs: "medicamentos"
     const data = await callApiData({
-      action: "Remedios.Listar",
-      payload: { somenteAtivos: true, q: "", limit: 800 },
+      action: "Medicamentos.ListarAtivos",
+      payload: { q: "", limit: 800 }
     });
 
-    const lista = (data && (data.remedios || data.lista || data.items)) || (Array.isArray(data) ? data : []);
+    // ✅ aceita ambos os formatos
+    const lista =
+      (data && (data.remedios || data.medicamentos || data.lista || data.items)) ||
+      (Array.isArray(data) ? data : []);
+
     remedios = Array.isArray(lista) ? lista : [];
     remediosCarregados = true;
-
     return remedios;
   }
-
-  /* =========================================================
-   * CONTEXTO DO PACIENTE
-   * ========================================================= */
 
   function getContextoProntuario() {
     if (PRONTIO.prontuarioContexto) return PRONTIO.prontuarioContexto;
@@ -98,14 +87,9 @@
     return ctx?.ID_Agenda || ctx?.idAgenda || "";
   }
 
-  /* =========================================================
-   * ITENS
-   * ========================================================= */
-
   function novoItem() {
     return {
       id: "MED_" + nextItemId++,
-      // canônico
       idRemedio: "",
       remedio: "",
       posologia: "",
@@ -139,10 +123,6 @@
     qsa("#receitaItensContainer .receita-item-sugestoes").forEach((c) => (c.innerHTML = ""));
   }
 
-  /* =========================================================
-   * RENDER
-   * ========================================================= */
-
   function renderItens() {
     const container = qs("#receitaItensContainer");
     if (!container) return;
@@ -175,7 +155,6 @@
 
       el.querySelector(".js-rem").addEventListener("input", (e) => {
         atualizarItem(item.id, "remedio", e.target.value);
-        // quando o usuário digita manualmente, não temos idRemedio garantido
         atualizarItem(item.id, "idRemedio", "");
         mostrarSugestoes(e.target.value, sug, item);
       });
@@ -190,10 +169,6 @@
       container.appendChild(el);
     });
   }
-
-  /* =========================================================
-   * AUTOCOMPLETE
-   * ========================================================= */
 
   async function mostrarSugestoes(termo, container, item) {
     container.innerHTML = "";
@@ -215,7 +190,10 @@
 
     matches.forEach((r) => {
       const nome = getNomeRemedio_(r);
-      const id = String(r.idRemedio || r.ID_Remedio || r.idMedicamento || r.ID_Medicamento || "").trim();
+
+      const id = String(
+        r.idRemedio || r.ID_Remedio || r.idMedicamento || r.ID_Medicamento || ""
+      ).trim();
 
       const li = document.createElement("li");
       li.innerHTML = `<button type="button"><strong>${escapeHtml(nome)}</strong></button>`;
@@ -235,14 +213,7 @@
     container.appendChild(ul);
   }
 
-  /* =========================================================
-   * SUBMIT
-   * ========================================================= */
-
   function itensParaPayload() {
-    // ✅ PADRONIZAÇÃO COMPLETA:
-    // Agora envia SOMENTE o canônico que o backend entende:
-    // { idRemedio, remedio, posologia, via, quantidade, observacao }
     return itens
       .filter((i) => i.remedio || i.posologia)
       .map((i) => ({
@@ -310,10 +281,6 @@
     }
   }
 
-  /* =========================================================
-   * PAINEL (abrir/fechar + hooks PRONTIO)
-   * ========================================================= */
-
   function abrirPainel_() {
     const ctx = getContextoProntuario();
     if (!ctx?.idPaciente) {
@@ -339,43 +306,10 @@
     if (!panel) return;
 
     limparSugestoes_();
-
     panel.classList.remove("is-open");
     panel.style.display = "none";
     panel.setAttribute("aria-hidden", "true");
   }
-
-  function carregarItensReceitaNoForm_(listaItens, observacoes) {
-    itens = [];
-    nextItemId = 1;
-
-    const list = Array.isArray(listaItens) ? listaItens : [];
-    if (!list.length) {
-      itens = [novoItem()];
-    } else {
-      itens = list.map((it) => ({
-        id: "MED_" + nextItemId++,
-
-        // ✅ prioriza o canônico salvo em ItensJson (Receita.gs)
-        idRemedio: String(it.idRemedio || it.ID_Remedio || it.idMedicamento || it.ID_Medicamento || "").trim(),
-        remedio: it.nomeRemedio || it.Nome_Remedio || it.remedio || it.medicamento || it.nome || it.Nome || "",
-        posologia: it.posologia || it.Posologia || "",
-        via: it.viaAdministracao || it.Via_Administracao || it.via || it.Via || "",
-        quantidade: it.quantidade || it.Quantidade || "",
-        observacao: it.observacao || it.Observacao || "",
-      }));
-    }
-
-    const obs = qs("#receitaObservacoes");
-    if (obs) obs.value = observacoes || "";
-
-    renderItens();
-    abrirPainel_();
-  }
-
-  /* =========================================================
-   * INIT
-   * ========================================================= */
 
   function init() {
     const form = qs("#formReceitaProntuario");
@@ -398,7 +332,6 @@
 
     PRONTIO.abrirReceitaPanel = abrirPainel_;
     PRONTIO.fecharReceitaPanel = fecharPainel_;
-    PRONTIO.carregarItensReceitaNoForm = carregarItensReceitaNoForm_;
 
     itens = [novoItem()];
     renderItens();
