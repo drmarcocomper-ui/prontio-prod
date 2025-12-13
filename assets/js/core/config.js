@@ -20,15 +20,11 @@
   function detectEnv_() {
     const host = (global.location && global.location.hostname) || "";
 
-    // Ambiente DEV local
-    if (host === "localhost" || host === "127.0.0.1") {
-      return "dev";
-    }
+    // DEV local
+    if (host === "localhost" || host === "127.0.0.1") return "dev";
 
-    // ✅ Ambiente DEV no GitHub Pages
-    if (host.endsWith("github.io")) {
-      return "dev";
-    }
+    // DEV no GitHub Pages
+    if (host.endsWith("github.io")) return "dev";
 
     // Default seguro
     return "prod";
@@ -37,11 +33,12 @@
   const ENV = detectEnv_();
 
   // -------------------------------------
-  // URLs da API (Apps Script)
+  // URLs da API (Apps Script WebApp)
+  // ✅ Usa script.googleusercontent.com para evitar redirect e CORS/preflight
   // -------------------------------------
   const API_URLS = {
-    dev: "https://script.google.com/macros/s/AKfycbzNH8mqthPdHYP7IyNdJYn3EIt9xSmCGwPGg1bIo5aicgBuvz7HmTP-UAQ47F2RSIq0Eg/exec",
-    prod: "https://script.google.com/macros/s/AKfycbzwvF6F1WTHUnU1Ysn0ob-BUOK2IlzmXWUX4E1kXSff761VV9gzLHS_Cr6WI_1DQ8ETeg/exec"
+    dev: "https://script.googleusercontent.com/macros/AKfycbzIajYBY9VExAkSmzjmo_w92DRAEOh9sjuLwgD5pQJPFT-eib6SaYo_AJyckOMTElQj1w/exec",
+    prod: "https://script.googleusercontent.com/macros/AKfycbwGwSrgphYjR374ftYwbMczqnJzWTZvQXyyfcDGhyHsCGfuxbjd7FfhBEkUHoKrKC6AWQ/exec"
   };
 
   // -------------------------------------
