@@ -1,13 +1,8 @@
 /**
  * PRONTIO - Receita (painel lateral no prontuário)
- *
- * Padrão PRONTIO:
- * - Usar callApiData() (retorna somente data e lança erro em success=false)
- *
- * Observação importante:
- * - Backend DEV ainda não reconhece "Remedios.*" no Api.gs (módulo desconhecido).
- * - Portanto, aqui chamamos "Medicamentos.ListarAtivos" (que já funciona),
- *   mas aceitamos retorno tanto em data.medicamentos (legado) quanto data.remedios (canônico).
+ * Melhorias UI:
+ * - Sugestões com título + subtítulo (apresentação/via/tipo)
+ * - HTML mais limpo (sem “caixa/tabela”)
  */
 
 (function (global, document) {
@@ -30,7 +25,28 @@
 
   function getNomeRemedio_(r) {
     return String(
-      (r && (r.Nome_Remedio || r.Nome_Medicacao || r.nomeRemedio || r.nomeMedicacao || r.nome || r.Nome || r.Medicamento)) || ""
+      (r && (
+        r.Nome_Remedio ||
+        r.Nome_Medicacao ||
+        r.nomeRemedio ||
+        r.nomeMedicacao ||
+        r.nome ||
+        r.Nome ||
+        r.Medicamento ||
+        r.remedio
+      )) || ""
+    ).trim();
+  }
+
+  function getIdRemedio_(r) {
+    return String(
+      (r && (
+        r.idRemedio ||
+        r.ID_Remedio ||
+        r.idMedicamento ||
+        r.ID_Medicamento ||
+        r.ID_Medicamento
+      )) || ""
     ).trim();
   }
 
@@ -46,16 +62,38 @@
     return String((r && (r.Quantidade || r.quantidade || r.Apresentacao || r.apresentacao)) || "").trim();
   }
 
+  function getTipoReceita_(r) {
+    return String((r && (r.Tipo_Receita || r.tipoReceita || r.TipoReceita)) || "").trim();
+  }
+
+  function getApresentacao_(r) {
+    return String((r && (r.apresentacao || r.Apresentacao)) || "").trim();
+  }
+
+  function buildSugSub_(r) {
+    const parts = [];
+    const ap = getApresentacao_(r);
+    const via = getViaRemedio_(r);
+    const qt = getQuantidadeRemedio_(r);
+    const tipo = getTipoReceita_(r);
+
+    if (ap) parts.push(ap);
+    else if (qt) parts.push(qt);
+
+    if (via) parts.push("Via: " + via);
+    if (tipo) parts.push("Tipo: " + tipo);
+
+    return parts.join(" • ");
+  }
+
   async function carregarCatalogoRemedios() {
     if (remediosCarregados) return remedios;
 
-    // ✅ Usa módulo existente no Api.gs: "medicamentos"
     const data = await callApiData({
       action: "Medicamentos.ListarAtivos",
       payload: { q: "", limit: 800 }
     });
 
-    // ✅ aceita ambos os formatos
     const lista =
       (data && (data.remedios || data.medicamentos || data.lista || data.items)) ||
       (Array.isArray(data) ? data : []);
@@ -63,28 +101,6 @@
     remedios = Array.isArray(lista) ? lista : [];
     remediosCarregados = true;
     return remedios;
-  }
-
-  function getContextoProntuario() {
-    if (PRONTIO.prontuarioContexto) return PRONTIO.prontuarioContexto;
-
-    try {
-      const raw = localStorage.getItem("prontio.prontuarioContexto");
-      if (raw) return JSON.parse(raw);
-    } catch {}
-
-    const id = qs("#prontuario-paciente-id")?.textContent.trim();
-    return { idPaciente: id && id !== "—" ? id : "" };
-  }
-
-  function getIdPacienteAtual() {
-    const ctx = getContextoProntuario();
-    return ctx?.ID_Paciente || ctx?.idPaciente || "";
-  }
-
-  function getIdAgendaAtual() {
-    const ctx = getContextoProntuario();
-    return ctx?.ID_Agenda || ctx?.idAgenda || "";
   }
 
   function novoItem() {
@@ -181,7 +197,7 @@
 
     const matches = lista
       .filter((r) => getNomeRemedio_(r).toLowerCase().includes(t))
-      .slice(0, 10);
+      .slice(0, 12);
 
     if (!matches.length) return;
 
@@ -190,20 +206,27 @@
 
     matches.forEach((r) => {
       const nome = getNomeRemedio_(r);
-
-      const id = String(
-        r.idRemedio || r.ID_Remedio || r.idMedicamento || r.ID_Medicamento || ""
-      ).trim();
+      const sub = buildSugSub_(r);
+      const id = getIdRemedio_(r);
 
       const li = document.createElement("li");
-      li.innerHTML = `<button type="button"><strong>${escapeHtml(nome)}</strong></button>`;
+      li.innerHTML = `
+        <button type="button">
+          <div class="rx-sug-title">${escapeHtml(nome)}</div>
+          ${sub ? `<div class="rx-sug-sub">${escapeHtml(sub)}</div>` : ""}
+        </button>
+      `;
 
       li.addEventListener("click", () => {
         atualizarItem(item.id, "idRemedio", id);
         atualizarItem(item.id, "remedio", nome);
+
+        // auto-preencher se existir no catálogo
         atualizarItem(item.id, "posologia", getPosologiaRemedio_(r));
         atualizarItem(item.id, "via", getViaRemedio_(r));
         atualizarItem(item.id, "quantidade", getQuantidadeRemedio_(r));
+
+        container.innerHTML = "";
         renderItens();
       });
 
@@ -215,32 +238,34 @@
 
   function itensParaPayload() {
     return itens
-      .filter((i) => i.remedio || i.posologia)
+      .filter((i) => (i.remedio && i.remedio.trim()) || (i.posologia && i.posologia.trim()))
       .map((i) => ({
-        idRemedio: i.idRemedio || "",
-        remedio: i.remedio,
-        posologia: i.posologia,
-        via: i.via,
-        quantidade: i.quantidade,
-        observacao: i.observacao,
+        idRemedio: String(i.idRemedio || "").trim(),
+        remedio: String(i.remedio || "").trim(),
+        posologia: String(i.posologia || "").trim(),
+        via: String(i.via || "").trim(),
+        quantidade: String(i.quantidade || "").trim(),
+        observacao: String(i.observacao || "").trim(),
       }));
   }
 
   async function onSubmit(ev) {
     ev.preventDefault();
 
-    const idPaciente = getIdPacienteAtual();
-    if (!idPaciente) return alert("Paciente não identificado.");
+    const idPaciente = (PRONTIO.prontuarioContexto && (PRONTIO.prontuarioContexto.ID_Paciente || PRONTIO.prontuarioContexto.idPaciente)) ||
+      (qs("#prontuario-paciente-id")?.textContent || "").trim();
+
+    if (!idPaciente || idPaciente === "—") return alert("Paciente não identificado.");
 
     const payload = {
       idPaciente,
-      idAgenda: getIdAgendaAtual(),
+      idAgenda: (PRONTIO.prontuarioContexto && (PRONTIO.prontuarioContexto.ID_Agenda || PRONTIO.prontuarioContexto.idAgenda)) || "",
       dataReceita: qs("#receitaData")?.value || "",
       observacoes: qs("#receitaObservacoes")?.value || "",
       itens: itensParaPayload(),
     };
 
-    if (!payload.itens.length) return alert("Informe ao menos um remédio.");
+    if (!payload.itens.length) return alert("Informe ao menos um medicamento.");
 
     const acao =
       ev.submitter?.dataset?.acaoReceita === "rascunho"
@@ -282,12 +307,6 @@
   }
 
   function abrirPainel_() {
-    const ctx = getContextoProntuario();
-    if (!ctx?.idPaciente) {
-      alert("Nenhum paciente selecionado.");
-      return;
-    }
-
     const panel = qs("#receitaPanel");
     if (!panel) return;
 
