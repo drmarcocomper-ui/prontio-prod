@@ -1,8 +1,11 @@
 /**
  * PRONTIO - Receita (painel lateral no prontuário)
- * Melhorias UI:
- * - Sugestões com título + subtítulo (apresentação/via/tipo)
- * - HTML mais limpo (sem “caixa/tabela”)
+ *
+ * Melhorias (sem quebrar o que já funciona):
+ * - Sugestões mais legíveis (nome + detalhes)
+ * - Navegação por teclado (↑ ↓ Enter Esc)
+ * - Debounce leve
+ * - Fecha sugestões ao clicar fora
  */
 
 (function (global, document) {
@@ -20,74 +23,54 @@
   let itens = [];
   let nextItemId = 1;
 
-  let remedios = [];
-  let remediosCarregados = false;
+  let catalogo = [];
+  let catalogoCarregado = false;
 
-  function getNomeRemedio_(r) {
+  // debounce por input
+  let debounceTimer = null;
+
+  // estado para teclado
+  let activeListEl = null;
+  let activeInputEl = null;
+  let activeIndex = -1;
+
+  function getNome_(r) {
     return String(
-      (r && (
-        r.Nome_Remedio ||
-        r.Nome_Medicacao ||
-        r.nomeRemedio ||
-        r.nomeMedicacao ||
-        r.nome ||
-        r.Nome ||
-        r.Medicamento ||
-        r.remedio
-      )) || ""
+      (r && (r.Nome_Remedio || r.Nome_Medicacao || r.nomeRemedio || r.nome || r.remedio)) || ""
     ).trim();
   }
 
-  function getIdRemedio_(r) {
-    return String(
-      (r && (
-        r.idRemedio ||
-        r.ID_Remedio ||
-        r.idMedicamento ||
-        r.ID_Medicamento ||
-        r.ID_Medicamento
-      )) || ""
-    ).trim();
+  function getId_(r) {
+    return String(r.idRemedio || r.ID_Remedio || r.idMedicamento || r.ID_Medicamento || "").trim();
   }
 
-  function getPosologiaRemedio_(r) {
-    return String((r && (r.Posologia || r.posologia)) || "").trim();
+  function getVia_(r) {
+    return String(r.Via_Administracao || r.viaAdministracao || r.via || "").trim();
   }
 
-  function getViaRemedio_(r) {
-    return String((r && (r.Via_Administracao || r.viaAdministracao || r.Via || r.via)) || "").trim();
+  function getQtd_(r) {
+    return String(r.Quantidade || r.quantidade || r.apresentacao || "").trim();
   }
 
-  function getQuantidadeRemedio_(r) {
-    return String((r && (r.Quantidade || r.quantidade || r.Apresentacao || r.apresentacao)) || "").trim();
+  function getTipo_(r) {
+    return String(r.Tipo_Receita || r.tipoReceita || "").trim();
   }
 
-  function getTipoReceita_(r) {
-    return String((r && (r.Tipo_Receita || r.tipoReceita || r.TipoReceita)) || "").trim();
-  }
-
-  function getApresentacao_(r) {
-    return String((r && (r.apresentacao || r.Apresentacao)) || "").trim();
-  }
-
-  function buildSugSub_(r) {
+  function buildSub_(r) {
     const parts = [];
-    const ap = getApresentacao_(r);
-    const via = getViaRemedio_(r);
-    const qt = getQuantidadeRemedio_(r);
-    const tipo = getTipoReceita_(r);
+    const qtd = getQtd_(r);
+    const via = getVia_(r);
+    const tipo = getTipo_(r);
 
-    if (ap) parts.push(ap);
-    else if (qt) parts.push(qt);
-
+    if (qtd) parts.push(qtd);
     if (via) parts.push("Via: " + via);
     if (tipo) parts.push("Tipo: " + tipo);
 
     return parts.join(" • ");
   }
 
-  async function carregarCatalogoRemedios() {
-    if (remediosCarregados) return remedios;
+  async function carregarCatalogo_() {
+    if (catalogoCarregado) return catalogo;
 
     const data = await callApiData({
       action: "Medicamentos.ListarAtivos",
@@ -95,12 +78,12 @@
     });
 
     const lista =
-      (data && (data.remedios || data.medicamentos || data.lista || data.items)) ||
+      (data && (data.medicamentos || data.remedios || data.lista || data.items)) ||
       (Array.isArray(data) ? data : []);
 
-    remedios = Array.isArray(lista) ? lista : [];
-    remediosCarregados = true;
-    return remedios;
+    catalogo = Array.isArray(lista) ? lista : [];
+    catalogoCarregado = true;
+    return catalogo;
   }
 
   function novoItem() {
@@ -131,12 +114,15 @@
   }
 
   function atualizarItem(id, campo, valor) {
-    const item = itens.find((i) => i.id === id);
-    if (item) item[campo] = valor;
+    const it = itens.find((i) => i.id === id);
+    if (it) it[campo] = valor;
   }
 
-  function limparSugestoes_() {
+  function closeSugestoes_() {
     qsa("#receitaItensContainer .receita-item-sugestoes").forEach((c) => (c.innerHTML = ""));
+    activeListEl = null;
+    activeInputEl = null;
+    activeIndex = -1;
   }
 
   function renderItens() {
@@ -168,11 +154,38 @@
       `;
 
       const sug = el.querySelector(".receita-item-sugestoes");
+      const inp = el.querySelector(".js-rem");
 
-      el.querySelector(".js-rem").addEventListener("input", (e) => {
+      inp.addEventListener("input", (e) => {
         atualizarItem(item.id, "remedio", e.target.value);
         atualizarItem(item.id, "idRemedio", "");
-        mostrarSugestoes(e.target.value, sug, item);
+
+        // debounce leve
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          mostrarSugestoes_(e.target.value, sug, item, inp);
+        }, 120);
+      });
+
+      inp.addEventListener("keydown", (e) => {
+        if (!activeListEl) return;
+
+        const buttons = Array.from(activeListEl.querySelectorAll("button"));
+        if (!buttons.length) return;
+
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          activeIndex = Math.min(activeIndex + 1, buttons.length - 1);
+          buttons[activeIndex].focus();
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          activeIndex = Math.max(activeIndex - 1, 0);
+          buttons[activeIndex].focus();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          closeSugestoes_();
+          inp.blur();
+        }
       });
 
       el.querySelector(".js-pos").addEventListener("input", (e) => atualizarItem(item.id, "posologia", e.target.value));
@@ -186,17 +199,32 @@
     });
   }
 
-  async function mostrarSugestoes(termo, container, item) {
-    container.innerHTML = "";
+  function highlight_(text, term) {
+    const s = String(text || "");
+    const t = String(term || "").trim();
+    if (!t) return escapeHtml(s);
 
-    const lista = await carregarCatalogoRemedios();
-    if (!lista.length) return;
+    const idx = s.toLowerCase().indexOf(t.toLowerCase());
+    if (idx < 0) return escapeHtml(s);
+
+    const before = s.slice(0, idx);
+    const mid = s.slice(idx, idx + t.length);
+    const after = s.slice(idx + t.length);
+
+    return `${escapeHtml(before)}<span class="rx-hl">${escapeHtml(mid)}</span>${escapeHtml(after)}`;
+  }
+
+  async function mostrarSugestoes_(termo, container, item, inputEl) {
+    container.innerHTML = "";
 
     const t = (termo || "").toLowerCase().trim();
     if (!t) return;
 
+    const lista = await carregarCatalogo_();
+    if (!lista.length) return;
+
     const matches = lista
-      .filter((r) => getNomeRemedio_(r).toLowerCase().includes(t))
+      .filter((r) => getNome_(r).toLowerCase().includes(t))
       .slice(0, 12);
 
     if (!matches.length) return;
@@ -205,26 +233,25 @@
     ul.className = "receita-sugestoes-lista";
 
     matches.forEach((r) => {
-      const nome = getNomeRemedio_(r);
-      const sub = buildSugSub_(r);
-      const id = getIdRemedio_(r);
+      const nome = getNome_(r);
+      const sub = buildSub_(r);
+      const id = getId_(r);
 
       const li = document.createElement("li");
       li.innerHTML = `
         <button type="button">
-          <div class="rx-sug-title">${escapeHtml(nome)}</div>
+          <div class="rx-sug-title">${highlight_(nome, termo)}</div>
           ${sub ? `<div class="rx-sug-sub">${escapeHtml(sub)}</div>` : ""}
         </button>
       `;
 
-      li.addEventListener("click", () => {
+      li.querySelector("button").addEventListener("click", () => {
         atualizarItem(item.id, "idRemedio", id);
         atualizarItem(item.id, "remedio", nome);
 
-        // auto-preencher se existir no catálogo
-        atualizarItem(item.id, "posologia", getPosologiaRemedio_(r));
-        atualizarItem(item.id, "via", getViaRemedio_(r));
-        atualizarItem(item.id, "quantidade", getQuantidadeRemedio_(r));
+        // autopreencher se existir
+        atualizarItem(item.id, "via", getVia_(r));
+        atualizarItem(item.id, "quantidade", getQtd_(r));
 
         container.innerHTML = "";
         renderItens();
@@ -234,9 +261,13 @@
     });
 
     container.appendChild(ul);
+
+    activeListEl = ul;
+    activeInputEl = inputEl;
+    activeIndex = -1;
   }
 
-  function itensParaPayload() {
+  function itensParaPayload_() {
     return itens
       .filter((i) => (i.remedio && i.remedio.trim()) || (i.posologia && i.posologia.trim()))
       .map((i) => ({
@@ -249,20 +280,19 @@
       }));
   }
 
-  async function onSubmit(ev) {
+  async function onSubmit_(ev) {
     ev.preventDefault();
 
-    const idPaciente = (PRONTIO.prontuarioContexto && (PRONTIO.prontuarioContexto.ID_Paciente || PRONTIO.prontuarioContexto.idPaciente)) ||
-      (qs("#prontuario-paciente-id")?.textContent || "").trim();
-
-    if (!idPaciente || idPaciente === "—") return alert("Paciente não identificado.");
+    const ctx = PRONTIO.prontuarioContexto || {};
+    const idPaciente = String(ctx.ID_Paciente || ctx.idPaciente || "").trim();
+    if (!idPaciente) return alert("Paciente não identificado.");
 
     const payload = {
       idPaciente,
-      idAgenda: (PRONTIO.prontuarioContexto && (PRONTIO.prontuarioContexto.ID_Agenda || PRONTIO.prontuarioContexto.idAgenda)) || "",
+      idAgenda: String(ctx.ID_Agenda || ctx.idAgenda || "").trim(),
       dataReceita: qs("#receitaData")?.value || "",
       observacoes: qs("#receitaObservacoes")?.value || "",
-      itens: itensParaPayload(),
+      itens: itensParaPayload_(),
     };
 
     if (!payload.itens.length) return alert("Informe ao menos um medicamento.");
@@ -282,11 +312,7 @@
       "";
 
     if (acao === "Receita.SalvarFinal" && idReceita) {
-      const pdf = await callApiData({
-        action: "Receita.GerarPdf",
-        payload: { idReceita },
-      });
-
+      const pdf = await callApiData({ action: "Receita.GerarPdf", payload: { idReceita } });
       const win = window.open("", "_blank");
       if (!win) return alert("Pop-up bloqueado. Libere para imprimir a receita.");
       win.document.open();
@@ -296,6 +322,7 @@
 
     itens = [novoItem()];
     renderItens();
+    closeSugestoes_();
 
     if (typeof PRONTIO.recarregarReceitasPaciente === "function") {
       PRONTIO.recarregarReceitasPaciente({ apenasUltima: true });
@@ -317,14 +344,14 @@
     const data = qs("#receitaData");
     if (data && !data.value) data.value = new Date().toISOString().slice(0, 10);
 
-    carregarCatalogoRemedios().catch(() => {});
+    carregarCatalogo_().catch(() => {});
   }
 
   function fecharPainel_() {
     const panel = qs("#receitaPanel");
     if (!panel) return;
 
-    limparSugestoes_();
+    closeSugestoes_();
     panel.classList.remove("is-open");
     panel.style.display = "none";
     panel.setAttribute("aria-hidden", "true");
@@ -335,6 +362,13 @@
     const panel = qs("#receitaPanel");
     const btnAbrir = qs("#btnAcaoReceita");
     if (!form || !panel || !btnAbrir) return;
+
+    // fecha sugestões ao clicar fora
+    document.addEventListener("click", (e) => {
+      if (!activeListEl) return;
+      const clickedInside = activeListEl.contains(e.target) || (activeInputEl && activeInputEl.contains(e.target));
+      if (!clickedInside) closeSugestoes_();
+    });
 
     btnAbrir.addEventListener("click", abrirPainel_);
 
@@ -347,7 +381,7 @@
     });
 
     qs("#btnAdicionarMedicamento")?.addEventListener("click", adicionarItem);
-    form.addEventListener("submit", onSubmit);
+    form.addEventListener("submit", onSubmit_);
 
     PRONTIO.abrirReceitaPanel = abrirPainel_;
     PRONTIO.fecharReceitaPanel = fecharPainel_;

@@ -1,5 +1,5 @@
 /* =========================================================
- * PRONTIO — Autocomplete da Receita
+ * PRONTIO — Autocomplete da Receita (dropdown moderno)
  * ========================================================= */
 
 :root {
@@ -8,6 +8,7 @@
   --rx-muted: rgba(17, 24, 39, 0.65);
   --rx-border: rgba(0, 0, 0, 0.12);
   --rx-hover: rgba(37, 99, 235, 0.10);
+  --rx-focus: rgba(37, 99, 235, 0.30);
   --rx-shadow: 0 12px 28px rgba(0,0,0,0.18);
 }
 
@@ -17,6 +18,7 @@ body[data-theme="dark"] {
   --rx-muted: rgba(229, 231, 235, 0.65);
   --rx-border: rgba(255, 255, 255, 0.12);
   --rx-hover: rgba(37, 99, 235, 0.20);
+  --rx-focus: rgba(37, 99, 235, 0.55);
   --rx-shadow: 0 18px 40px rgba(0,0,0,0.55);
 }
 
@@ -42,6 +44,7 @@ body[data-theme="dark"] {
   box-shadow: var(--rx-shadow);
 }
 
+/* mata estilos herdados “quadrados” */
 .receita-sugestoes-lista,
 .receita-sugestoes-lista * {
   box-sizing: border-box;
@@ -74,8 +77,13 @@ body[data-theme="dark"] {
   background: var(--rx-hover);
 }
 
+.receita-sugestoes-lista li button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--rx-focus);
+}
+
 .rx-sug-title {
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .rx-sug-sub {
@@ -85,4 +93,23 @@ body[data-theme="dark"] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* highlight do termo digitado */
+.rx-hl {
+  background: rgba(37, 99, 235, 0.18);
+  border-radius: 6px;
+  padding: 0 4px;
+}
+
+/* scrollbar discreta */
+.receita-sugestoes-lista::-webkit-scrollbar {
+  width: 10px;
+}
+.receita-sugestoes-lista::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.18);
+  border-radius: 8px;
+}
+body[data-theme="dark"] .receita-sugestoes-lista::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.18);
 }
