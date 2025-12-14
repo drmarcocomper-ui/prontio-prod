@@ -251,19 +251,18 @@
     initModals_();
     initThemeToggle_();
 
-    // ✅ API primeiro
     await ensureApiLoaded_();
 
     const pageId = getPageId_();
     if (!pageId) return;
 
-    // Carrega o JS da página atual se ainda não registrado
+    // Carrega o JS da página atual
     if (!PRONTIO.pages[pageId]) {
       let ok = await loadOnce_("assets/js/pages/page-" + pageId + ".js");
       if (!ok) ok = await loadOnce_("assets/js/page-" + pageId + ".js");
     }
 
-    // ✅ MÓDULOS EXTRAS: prontuário precisa do controlador do painel de Receita
+    // Módulos extras do prontuário
     if (pageId === "prontuario") {
       await loadOnce_("assets/js/pages/page-receita.js");
     }
