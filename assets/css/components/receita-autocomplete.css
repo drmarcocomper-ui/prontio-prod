@@ -1,8 +1,16 @@
 /* =========================================================
  * PRONTIO — Autocomplete da Receita (dropdown)
- * Fix: z-index + overflow + visual limpo
+ * =========================================================
+ * Objetivos:
+ * - Dropdown acima do painel (z-index correto)
+ * - Não ser cortado por overflow
+ * - Visual limpo e clínico
+ * - Funciona em light / dark
  * ========================================================= */
 
+/* ===============================
+ * Tokens de tema
+ * =============================== */
 :root {
   --rx-bg: #ffffff;
   --rx-text: #111827;
@@ -23,24 +31,40 @@ body[data-theme="dark"] {
   --rx-shadow: 0 18px 40px rgba(0,0,0,0.55);
 }
 
-/* ✅ Evita o dropdown ser “cortado” pelo painel */
-#receitaPanel .slide-panel,
-#receitaPanel .slide-panel-body,
-#receitaPanel .receita-itens-container,
-#receitaPanel .receita-item-bloco {
+/* ===============================
+ * Garantias de layout
+ * =============================== */
+
+/* O item vira âncora do dropdown */
+.receita-item-bloco {
+  position: relative;
   overflow: visible !important;
 }
 
-/* Container da área de sugestões */
-.receita-item-sugestoes {
-  position: relative;
-  margin-top: 6px;
+/* Evita corte pelo painel */
+#receitaPanel,
+#receitaPanel .slide-panel,
+#receitaPanel .slide-panel-body,
+#receitaPanel .receita-itens-container {
+  overflow: visible !important;
 }
 
-/* Dropdown */
-.receita-sugestoes-lista {
+/* ===============================
+ * Slot das sugestões
+ * =============================== */
+.receita-item-sugestoes {
   position: absolute;
-  z-index: 99999; /* ✅ acima do modal/painel */
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 99999;
+  margin: 0;
+}
+
+/* ===============================
+ * Lista de sugestões
+ * =============================== */
+.receita-sugestoes-lista {
   width: 100%;
   max-height: 240px;
   overflow-y: auto;
@@ -55,17 +79,20 @@ body[data-theme="dark"] {
   box-shadow: var(--rx-shadow);
 }
 
-/* Mata estilos herdados que deixam “tabela quadrada” */
+/* Remove heranças estranhas */
 .receita-sugestoes-lista,
 .receita-sugestoes-lista * {
   box-sizing: border-box;
-  border: none !important;
 }
 
+/* Espaçamento entre itens */
 .receita-sugestoes-lista li + li {
   margin-top: 4px;
 }
 
+/* ===============================
+ * Botão de sugestão
+ * =============================== */
 .receita-sugestoes-lista li button {
   width: 100%;
   display: block;
@@ -81,6 +108,7 @@ body[data-theme="dark"] {
   font-size: 14px;
   line-height: 1.25;
 
+  border: none;
   transition: background-color 120ms ease;
 }
 
@@ -93,8 +121,11 @@ body[data-theme="dark"] {
   box-shadow: 0 0 0 3px var(--rx-focus);
 }
 
+/* ===============================
+ * Conteúdo interno
+ * =============================== */
 .rx-sug-title {
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .rx-sug-sub {
@@ -106,18 +137,26 @@ body[data-theme="dark"] {
   text-overflow: ellipsis;
 }
 
+/* Destaque do texto buscado */
 .rx-hl {
   background: rgba(37, 99, 235, 0.18);
   border-radius: 6px;
   padding: 0 4px;
 }
 
-/* Scroll discreto */
-.receita-sugestoes-lista::-webkit-scrollbar { width: 10px; }
+/* ===============================
+ * Scroll discreto
+ * =============================== */
+.receita-sugestoes-lista::-webkit-scrollbar {
+  width: 10px;
+}
+
 .receita-sugestoes-lista::-webkit-scrollbar-thumb {
   background: rgba(0,0,0,0.18);
   border-radius: 8px;
 }
-body[data-theme="dark"] .receita-sugestoes-lista::-webkit-scrollbar-thumb {
+
+body[data-theme="dark"]
+  .receita-sugestoes-lista::-webkit-scrollbar-thumb {
   background: rgba(255,255,255,0.18);
 }
