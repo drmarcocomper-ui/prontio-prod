@@ -1,5 +1,6 @@
 /* =========================================================
- * PRONTIO — Autocomplete da Receita (dropdown moderno)
+ * PRONTIO — Autocomplete da Receita (dropdown)
+ * Fix: z-index + overflow + visual limpo
  * ========================================================= */
 
 :root {
@@ -22,14 +23,24 @@ body[data-theme="dark"] {
   --rx-shadow: 0 18px 40px rgba(0,0,0,0.55);
 }
 
+/* ✅ Evita o dropdown ser “cortado” pelo painel */
+#receitaPanel .slide-panel,
+#receitaPanel .slide-panel-body,
+#receitaPanel .receita-itens-container,
+#receitaPanel .receita-item-bloco {
+  overflow: visible !important;
+}
+
+/* Container da área de sugestões */
 .receita-item-sugestoes {
   position: relative;
   margin-top: 6px;
 }
 
+/* Dropdown */
 .receita-sugestoes-lista {
   position: absolute;
-  z-index: 9999;
+  z-index: 99999; /* ✅ acima do modal/painel */
   width: 100%;
   max-height: 240px;
   overflow-y: auto;
@@ -44,7 +55,7 @@ body[data-theme="dark"] {
   box-shadow: var(--rx-shadow);
 }
 
-/* mata estilos herdados “quadrados” */
+/* Mata estilos herdados que deixam “tabela quadrada” */
 .receita-sugestoes-lista,
 .receita-sugestoes-lista * {
   box-sizing: border-box;
@@ -95,17 +106,14 @@ body[data-theme="dark"] {
   text-overflow: ellipsis;
 }
 
-/* highlight do termo digitado */
 .rx-hl {
   background: rgba(37, 99, 235, 0.18);
   border-radius: 6px;
   padding: 0 4px;
 }
 
-/* scrollbar discreta */
-.receita-sugestoes-lista::-webkit-scrollbar {
-  width: 10px;
-}
+/* Scroll discreto */
+.receita-sugestoes-lista::-webkit-scrollbar { width: 10px; }
 .receita-sugestoes-lista::-webkit-scrollbar-thumb {
   background: rgba(0,0,0,0.18);
   border-radius: 8px;
